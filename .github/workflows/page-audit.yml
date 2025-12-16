@@ -1,30 +1,30 @@
-name: Page Size Audit
+name: Page Audit
 
 on:
-  push:
-    branches: [main]
   pull_request:
     types: [ opened, synchronize, reopened ]
-    branches: [main]
+    
 
 jobs:
   audit:
     name: Audit Current Version
     uses: ./.github/workflows/reusable-audit.yml
     with:
-      run_argos: true
       theme_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       ref_name: current
-    secrets:
-      ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
+      run_lighthouse_ci: true
 
   audit-base:
     name: Audit Base Version
-    if: github.event_name == 'pull_request'
+    # Run when the workflow is triggered by a pull request event.
+    # Use presence of `github.event.pull_request` so this works for both
+    # `pull_request` and `pull_request_target` triggers.
+    if: github.event.pull_request != null
     uses: ./.github/workflows/reusable-audit.yml
     with:
       theme_ref: ${{ github.event.pull_request.base.sha }}
       ref_name: base
+      run_lighthouse_ci: true
   
   compare-and-comment:
     name: Compare and Comment
@@ -40,18 +40,18 @@ jobs:
         uses: actions/checkout@v6
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
       
       - name: Download current reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: page-size-reports-current
           path: ./reports-current
       
       - name: Download base reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: page-size-reports-base
           path: ./reports-base
@@ -79,11 +79,11 @@ jobs:
                 issue_number: context.issue.number,
                 body: report
               });
-              console.log('✓ 成功发布评论');
+              console.log('✓ Comment posted successfully');
             } catch (error) {
               if (error.status === 403) {
-                console.log('⚠️  无法发布评论（权限不足）。这通常发生在 Dependabot 或其他 bot 创建的 PR 中。');
-                console.log('📊 报告已生成并上传为 artifact，可以手动查看。');
+                console.log('⚠️ Cannot post comment (insufficient permissions). This often happens for PRs created by Dependabot or other bots.');
+                console.log('📊 The report has been generated and uploaded as an artifact; it can be viewed manually.');
               } else {
                 throw error;
               }
