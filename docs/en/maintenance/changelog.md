@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.65.0] - 2026-05-01
+
 ### 💥 Breaking Changes
 
 - Renamed the home page quote-related settings from `hitokoto`, `hitokoto_link`,
@@ -1915,7 +1917,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored the theme-switching implementation.
 - Updated original project links to point to the fork and adjusted metadata to avoid conflicts with the upstream theme.
 
-[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.1...HEAD
+[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.0...HEAD
+[1.65.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.1...v1.65.0
 [1.64.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.0...v1.64.1
 [1.64.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.63.6...v1.64.0
 [1.63.6]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.63.5...v1.63.6
