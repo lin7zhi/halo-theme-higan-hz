@@ -3365,21 +3365,21 @@ Boolean
 
 :::
 
-### Hitokoto (One Quote)
+### Quote Fetcher
 
 ::: info 🎯 Purpose
 
-Whether to display content from the Hitokoto random sentence service on the homepage.
+Whether to display quote content fetched from a plain-text endpoint on the homepage.
 
 :::
 ::: info 📂 Configuration Item Location
 
-Home Page Style -> Hitokoto (One Quote)
+Home Page Style -> Quote fetcher
 
 :::
 ::: info ⚡ Quick Jump
 
-<QuickJumpConfig to="/console/theme/settings/index_styles#:~:text=Hitokoto" />
+<QuickJumpConfig to="/console/theme/settings/index_styles#:~:text=Quote%20fetcher" />
 
 :::
 ::: info 🏷️ Type
@@ -3394,19 +3394,19 @@ Boolean
 :::
 ::: info 🧩 Template Variable
 
-`theme.config?.index_styles?.hitokoto`
+`theme.config?.index_styles?.quote`
 
 :::
 ::: info ℹ️ Additional Information
 
 When enabled, you can configure
 
-- Hitokoto service link:
-  - Default Value:`https://v1.hitokoto.cn/?encode=js`
-  - Additional notes: Related information can be obtained by reading the [documentation](https://developer.hitokoto.cn/sentence/)
-- Hitokoto fade-in animation:
+- Quote fetcher link:
+  - Default Value: `https://v1.hitokoto.cn/?encode=text`
+  - Additional notes: The endpoint must return plain text. Since this is fetched from the browser, any cross-origin endpoint must also support CORS; otherwise the request will fail even if it returns plain text. For default endpoint details, refer to the [documentation](https://developer.hitokoto.cn/sentence/)
+- Quote fetcher fade-in animation:
   - Default Value: `true`
-  - Additional notes: Controls whether to play the fade-in animation after Hitokoto content is injected asynchronously.
+  - Additional notes: Controls whether to play the fade-in animation after the quote content is fetched asynchronously.
 
 :::
 

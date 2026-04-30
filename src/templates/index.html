@@ -13,6 +13,9 @@
     <link rel="canonical" th:if="${theme.config?.index_styles?.is_enable_canonical_link}" th:href="${siteUrl}" />
     <script src="/page-components/index/index.ts" type="module"></script>
     <th:block th:insert="~{components/header/template :: head}"></th:block>
+    <th:block th:if="${theme.config?.index_styles?.quote}">
+      <th:block th:insert="~{components/quote-fetcher/template :: head}"></th:block>
+    </th:block>
     <th:block th:if="${theme.config?.index_styles?.list_layout == 'post-list-summary'}">
       <th:block th:insert="~{components/list-post-summary/template :: head}"></th:block>
     </th:block>
@@ -41,32 +44,8 @@
   </head>
   <body th:remove="tag">
     <section id="about">
-      <th:block th:if="${theme.config?.index_styles?.hitokoto}">
-        <script skip-sri th:src="${theme.config?.index_styles?.hitokoto_link}" defer></script>
-        <p class="hitokoto"></p>
-        <style>
-          .hitokoto:empty::before {
-            content: "\00a0";
-            visibility: hidden;
-          }
-        </style>
-        <style th:if="${theme.config?.index_styles?.is_hitokoto_fade_in_animation_enable}">
-          .hitokoto:not(:empty) {
-            animation: hitokoto-fade-in 0.45s ease-out;
-          }
-
-          @keyframes hitokoto-fade-in {
-            from {
-              opacity: 0%;
-              transform: translateY(0.25rem);
-            }
-
-            to {
-              opacity: 100%;
-              transform: translateY(0);
-            }
-          }
-        </style>
+      <th:block th:if="${theme.config?.index_styles?.quote}">
+        <th:block th:insert="~{components/quote-fetcher/template :: body}"></th:block>
       </th:block>
       <th:block
         th:if="${theme.config?.index_styles?.is_random_sentence_show and !#lists.isEmpty(theme.config?.index_styles?.random_sentence_list)}"
