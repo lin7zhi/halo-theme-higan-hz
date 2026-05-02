@@ -1,3 +1,6 @@
+import { resolve } from "node:path";
+
+import { footnote } from "@mdit/plugin-footnote";
 import { whyframe } from "@whyframe/core";
 import { whyframeVue } from "@whyframe/vue";
 import browserslist from "browserslist";
@@ -10,6 +13,11 @@ import pkg from "../../package.json" with { type: "json" };
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   vite: {
+    resolve: {
+      alias: {
+        "@higan-font-styles": resolve(import.meta.dirname, "../../src/templates/components/fonts/styles.css"),
+      },
+    },
     plugins: [
       // Initialize whyframe core plugin
       whyframe({
@@ -238,6 +246,9 @@ export default defineConfig({
   },
 
   markdown: {
+    config(md) {
+      md.use(footnote);
+    },
     container: {
       tipLabel: "提示",
       warningLabel: "警告",
