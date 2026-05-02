@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Bug Fixes
+
+- Fixed an issue in Halo CMS 2.24 where automatic query parameters on theme assets could make the default theme `logo` and the site `favicon` use different resource URLs and fetch `logo.avif` twice.
+
 ## [1.65.1] - 2026-05-02
 
 ### 🐛 Bug Fixes
