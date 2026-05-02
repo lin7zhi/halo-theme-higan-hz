@@ -43,7 +43,7 @@ jobs:
         id: sync-policy
         env:
           EVENT_NAME: ${{ github.event_name }}
-          SYNC_TO_HALO_STORE: ${{ github.event.inputs.sync_to_halo_store || 'false' }}
+          SYNC_TO_HALO_STORE: ${{ github.event.inputs.sync_to_halo_store }}
         run: |
           SHOULD_SYNC_APP_STORE=false
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SYNC_TO_HALO_STORE" = "true" ]; then
@@ -54,7 +54,7 @@ jobs:
       - name: Evaluate Nightly Release Eligibility
         id: changes
         env:
-          FORCE: ${{ github.event.inputs.force || 'false' }}
+          FORCE: ${{ github.event.inputs.force }}
         run: |
           WINDOW_START=$(TZ=Asia/Shanghai date -d 'yesterday 00:00:00' '+%Y-%m-%d %H:%M:%S %z')
           WINDOW_END=$(TZ=Asia/Shanghai date -d 'today 00:00:00' '+%Y-%m-%d %H:%M:%S %z')
@@ -143,14 +143,17 @@ jobs:
           PRERELEASE_VERSION: ${{ needs.prerelease.outputs.prerelease_version }}
         run: |
           assets=()
-          if [ -f dist/theme-packages/howiehz-higan-cn.zip ]; then
-            assets+=(dist/theme-packages/howiehz-higan-cn.zip)
-          fi
-          while IFS= read -r asset; do
-            if [ "$asset" != "dist/theme-packages/howiehz-higan-cn.zip" ]; then
+          preferred_assets=(
+            dist/theme-packages/howiehz-higan-zh-hans.zip
+            dist/theme-packages/howiehz-higan-zh-hans-full-precompressed.zip
+            dist/theme-packages/howiehz-higan-en.zip
+            dist/theme-packages/howiehz-higan-en-full-precompressed.zip
+          )
+          for asset in "${preferred_assets[@]}"; do
+            if [ -f "$asset" ]; then
               assets+=("$asset")
             fi
-          done < <(find dist/theme-packages -maxdepth 1 -type f | sort)
+          done
           gh release create "$PRERELEASE_TAG" "${assets[@]}" \
             --title "$PRERELEASE_VERSION" \
             --notes-file .github/templates/release-note-template.md \

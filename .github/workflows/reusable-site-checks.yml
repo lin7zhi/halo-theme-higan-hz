@@ -20,6 +20,7 @@ on:
         required: false
         type: string
         default: "2.24.1"
+        description: "Halo version (2.24.1 / v2.24.1)"
       theme_ref:
         required: false
         type: string
@@ -125,10 +126,12 @@ jobs:
           # Record environment information
           JAVA_VERSION=$(java -version 2>&1 | head -n 1 | awk -F '"' '{print $2}')
           echo "JAVA_VERSION=${JAVA_VERSION}" >> $GITHUB_ENV
-          # workflow_dispatch callers may pass an empty string explicitly; treat that
-          # the same as "not provided" so this reusable workflow still honors its
-          # documented default Halo version.
-          HALO_VERSION="${{ inputs.halo_version || '2.24.1' }}"
+          HALO_VERSION="${{ inputs.halo_version }}"
+          HALO_VERSION="${HALO_VERSION#v}"
+          if [ -z "$HALO_VERSION" ]; then
+            echo "❌ halo_version cannot be empty"
+            exit 1
+          fi
           echo "HALO_VERSION=${HALO_VERSION}" >> $GITHUB_ENV
 
           mkdir -p ~/logs
@@ -162,8 +165,8 @@ jobs:
               echo "⚠️ .github/include-list.txt not found; skipping include-list copy"
             fi
             cd ~/builds/tmp-included
-            zip -9 -r howiehz-higan-cn.zip .
-            mv howiehz-higan-cn.zip ~/builds/target/
+            zip -9 -r howiehz-higan-zh-hans.zip .
+            mv howiehz-higan-zh-hans.zip ~/builds/target/
             step_end=$(date +%s%3N); echo "STEP_END:pack-files:${step_end}" >> ~/logs/theme.timing
 
             task_end=$(date +%s%3N); echo "TASK_END:${task_end}" >> ~/logs/theme.timing
@@ -314,7 +317,7 @@ jobs:
       # ========== Phase 3: Subsequent steps (serial) ==========
       - name: Install and activate theme
         run: |
-          THEME_ZIP_PATH="${HOME}/builds/target/howiehz-higan-cn.zip"
+          THEME_ZIP_PATH="${HOME}/builds/target/howiehz-higan-zh-hans.zip"
 
           if [ ! -f "$THEME_ZIP_PATH" ]; then
             echo "❌ Theme file not found: $THEME_ZIP_PATH"
