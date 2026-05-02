@@ -23,6 +23,8 @@
 
 ## [Unreleased]
 
+## [1.65.1] - 2026-05-02
+
 ### 🐛 错误修复
 
 - 修复文章详情页返回顶部图标缺少无障碍名称（`aria-label`）的问题。
@@ -1850,7 +1852,8 @@
 - 重构样式切换方式
 - 修改原项目链接指向 fork 后的项目链接，修改元数据避免与原主题冲突
 
-[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.0...HEAD
+[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.1...HEAD
+[1.65.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.0...v1.65.1
 [1.65.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.1...v1.65.0
 [1.64.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.0...v1.64.1
 [1.64.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.63.6...v1.64.0
