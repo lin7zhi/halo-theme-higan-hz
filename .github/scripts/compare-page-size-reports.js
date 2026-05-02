@@ -2,15 +2,23 @@
 
 import { readFile, writeFile } from "fs/promises";
 
+import { decodeAuditFile } from "./page-size-audit-schema.js";
+
 const CURRENT_REPORT = process.env.CURRENT_REPORT || "./reports-current/page-size-report.json";
 const BASE_REPORT = process.env.BASE_REPORT || "./reports-base/page-size-report.json";
 const OUTPUT_FILE = process.env.OUTPUT_FILE || "./comparison-report.md";
+
+function formatThemeVersionForDisplay(value) {
+  if (typeof value !== "string" || value.length === 0) return value;
+  if (/^[0-9a-f]{40}$/i.test(value)) return value;
+  return value.startsWith("v") ? value : `v${value}`;
+}
 
 /** 读取 JSON 报告 */
 async function readReport(path) {
   try {
     const content = await readFile(path, "utf-8");
-    return JSON.parse(content);
+    return decodeAuditFile(JSON.parse(content));
   } catch (error) {
     throw new Error(`无法读取报告文件 ${path}: ${error.message}`, { cause: error });
   }
@@ -164,7 +172,7 @@ function generateComparisonReport(currentReport, baseReport) {
     if (themeVersion.match(/^[0-9a-f]{40}$/i)) {
       markdown += `- Current Theme Version: [\`${themeVersion.substring(0, 7)}\`](https://github.com/HowieHz/halo-theme-higan-hz/commit/${themeVersion})\n`;
     } else {
-      markdown += `- Current Theme Version: ${themeVersion}\n`;
+      markdown += `- Current Theme Version: ${formatThemeVersionForDisplay(themeVersion)}\n`;
     }
   }
 
@@ -175,7 +183,7 @@ function generateComparisonReport(currentReport, baseReport) {
     if (baseThemeVersion.match(/^[0-9a-f]{40}$/i)) {
       markdown += `- Base Theme Version: [\`${baseThemeVersion.substring(0, 7)}\`](https://github.com/HowieHz/halo-theme-higan-hz/commit/${baseThemeVersion})\n`;
     } else {
-      markdown += `- Base Theme Version: ${baseThemeVersion}\n`;
+      markdown += `- Base Theme Version: ${formatThemeVersionForDisplay(baseThemeVersion)}\n`;
     }
   }
 

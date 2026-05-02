@@ -6,44 +6,117 @@ outline: deep
 
 # 性能参考
 
+<!-- markdownlint-disable MD011 -->
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, h, defineComponent } from 'vue'
 import { defineClientComponent, useData } from 'vitepress'
+import { decodeAuditFile, type AuditFile, type AuditPageResult, type ResourceType } from '../.vitepress/utils/page-size-audit-schema'
 
 const { isDark } = useData()
 
-// 页面 URL 映射
-const pageUrls = {
-  home: '/',
-  archives: '/archives',
-  post: '/archives/hello-halo',
-  tags: '/tags',
-  tagDetail: '/tags/halo',
-  categories: '/categories',
-  categoryDetail: '/categories/default',
-  author: '/authors/admin',
-  about: '/about'
-}
-
-// 页面中文名称
-const pageNames = {
-  average: '平均每个页面',
-  home: '首页',
-  archives: '文章归档',
-  post: '文章详情',
-  tags: '标签集合',
-  tagDetail: '标签详情',
-  categories: '分类集合',
-  categoryDetail: '分类详情',
-  author: '作者详情',
-  about: '独立页面'
-}
+// 页面定义
+const pageEntries = [
+  { key: 'home', url: '/' },
+  { key: 'archives', url: '/archives' },
+  { key: 'post', url: '/archives/hello-halo' },
+  { key: 'tags', url: '/tags' },
+  { key: 'tagDetail', url: '/tags/halo' },
+  { key: 'categories', url: '/categories' },
+  { key: 'categoryDetail', url: '/categories/default' },
+  { key: 'author', url: '/authors/admin' },
+  { key: 'about', url: '/about' }
+] as const
 
 // 资源类型配置
-const resourceTypes = ['document', 'font', 'script', 'stylesheet', 'image', 'fetch', 'other', 'total']
+const resourceTypes = ['document', 'font', 'script', 'stylesheet', 'image', 'fetch', 'other', 'total'] as const
+type ContentPage = (typeof pageEntries)[number]
+type ContentPageKey = ContentPage['key']
+type PageKey = ContentPageKey | 'average'
+type LoadedAuditEntry = {
+  version: string
+  data: AuditFile
+}
+type IndexedAuditEntry = {
+  version: string
+  resultsByUrl: Map<string, AuditPageResult>
+}
 
+type DatasetKind = 'themeGzipped' | 'themeRaw' | 'resourcesGzipped' | 'resourcesRaw'
+const datasetKinds = ['themeGzipped', 'themeRaw', 'resourcesGzipped', 'resourcesRaw'] as const satisfies readonly DatasetKind[]
+type NumericSeries = Record<ResourceType, Array<number | null>>
+type PageDatasets = Record<DatasetKind, NumericSeries>
+type DatasetCollection = Record<PageKey, PageDatasets>
+
+type ChartSeries = {
+  labels: string[]
+  datasets: Array<{
+    label: string
+    data: Array<number | null>
+    borderColor: string
+    backgroundColor: string
+    tension: number
+    borderWidth: number
+  }>
+}
+type ChartPageData = Record<DatasetKind, ChartSeries>
+type ChartDatasetCollection = Partial<Record<PageKey, ChartPageData>>
+
+type RawDatasetsState = {
+  datasets: DatasetCollection
+  versions: string[]
+}
+type ChartLoadingFlags = Record<DatasetKind, boolean>
+type ChartLoadingState = Record<PageKey, ChartLoadingFlags>
+
+function createEmptyNumericSeries(): NumericSeries {
+  return {
+    document: [],
+    font: [],
+    script: [],
+    stylesheet: [],
+    image: [],
+    fetch: [],
+    other: [],
+    total: []
+  }
+}
+
+function createEmptyPageDatasets(): PageDatasets {
+  return {
+    themeGzipped: createEmptyNumericSeries(),
+    themeRaw: createEmptyNumericSeries(),
+    resourcesGzipped: createEmptyNumericSeries(),
+    resourcesRaw: createEmptyNumericSeries()
+  }
+}
+
+function createDatasetCollection(): DatasetCollection {
+  const datasets = { average: createEmptyPageDatasets() } as DatasetCollection
+
+  for (const { key } of pageEntries) {
+    datasets[key] = createEmptyPageDatasets()
+  }
+
+  return datasets
+}
+
+function createChartLoadingState(isLoading = false): ChartLoadingState {
+  const flags: ChartLoadingFlags = {
+    themeGzipped: isLoading,
+    themeRaw: isLoading,
+    resourcesGzipped: isLoading,
+    resourcesRaw: isLoading
+  }
+  const state = { average: { ...flags } } as ChartLoadingState
+
+  for (const { key } of pageEntries) {
+    state[key] = { ...flags }
+  }
+
+  return state
+}
 // 响应式颜色配置（适配明暗主题）
-const resourceColors = computed(() => isDark.value ? {
+const resourceColors = computed<Record<ResourceType, string>>(() => isDark.value ? {
   // 暗色主题：使用更亮的颜色以提高对比度
   document: '#b794f4',
   font: '#4fd1c5',
@@ -74,24 +147,19 @@ const resourceLabels = {
   fetch: '数据请求',
   other: '其他',
   total: '总计'
-}
+} satisfies Record<ResourceType, string>
 
 // 存储所有图表数据
-const chartDatasets = ref({})
-const rawDatasets = ref({}) // 存储原始数据用于主题切换
+const chartDatasets = ref<ChartDatasetCollection>({})
+const rawDatasets = ref<RawDatasetsState | null>(null) // 存储原始数据用于主题切换
 
 // 加载进度状态
 const loadingProgress = ref(0)
 const isLoading = ref(false)
 const loadingStage = ref('')
-const stageProgress = ref({
-  dataLoading: 0,
-  dataProcessing: 0,
-  chartCreation: 0
-})
 
 // 每个图表的加载状态
-const chartLoadingStatus = ref({})
+const chartLoadingStatus = ref<ChartLoadingState>(createChartLoadingState())
 
 // 进度条组件
 const ProgressBar = defineComponent({
@@ -101,8 +169,9 @@ const ProgressBar = defineComponent({
     progress: Number
   },
   setup(props) {
+    // @ts-expect-error TS6133: vue-tsc false positive in VitePress Markdown; stage labels are used by the render function below.
     const stageNames = {
-      dataLoading: '数据加载',
+      dataLoading: '加载数据',
       dataProcessing: '数据排序与处理',
       chartCreation: '图表数据创建'
     }
@@ -246,26 +315,17 @@ onMounted(async () => {
   console.time('📊 图表初始化总耗时')
   isLoading.value = true
   loadingProgress.value = 0
-  
+
   // 初始化所有图表的加载状态为 true
-  const pageKeys = Object.keys(pageUrls).concat(['average'])
-  for (const pageKey of pageKeys) {
-    chartLoadingStatus.value[pageKey] = {
-      themeGzipped: true,
-      themeRaw: true,
-      resourcesGzipped: true,
-      resourcesRaw: true
-    }
-  }
+  chartLoadingStatus.value = createChartLoadingState(true)
   
   try {
     console.time('  1️⃣ 数据加载')
     loadingStage.value = 'dataLoading'
 
     // 动态导入所有 JSON 文件
-    const jsonFiles = import.meta.glob('../../.github/page_size_audit_results/*.json')
+    const jsonFiles = import.meta.glob<{ default: unknown }>('../../.github/page_size_audit_results/*.json')
 
-    const allData = []
     const paths = Object.keys(jsonFiles)
     const totalFiles = paths.length
     let completedCount = 0
@@ -278,21 +338,18 @@ onMounted(async () => {
       // 更新进度（使用原子操作确保准确）
       completedCount++
       const progress = Math.round((completedCount / totalFiles) * 100)
-      stageProgress.value.dataLoading = progress
       loadingProgress.value = progress
 
       if (version && module.default) {
         return {
           version,
-          data: module.default
+          data: decodeAuditFile(module.default) // compact schema fields are decoded back to original names here
         }
       }
       return null
     })
 
-    const results = await Promise.all(loadPromises)
-    allData.push(...results.filter(item => item !== null))
-    stageProgress.value.dataLoading = 100
+    const allData = (await Promise.all(loadPromises)).filter((item): item is LoadedAuditEntry => item !== null)
 
     console.timeEnd('  1️⃣ 数据加载')
 
@@ -301,7 +358,7 @@ onMounted(async () => {
     loadingProgress.value = 0
     // 按版本排序
     allData.sort((a, b) => {
-      const parseVersion = (v) => v.replace('v', '').split('.').map(Number)
+      const parseVersion = (v: string) => v.replace('v', '').split('.').map(Number)
       const [aMajor, aMinor, aPatch] = parseVersion(a.version)
       const [bMajor, bMinor, bPatch] = parseVersion(b.version)
 
@@ -310,30 +367,19 @@ onMounted(async () => {
       return aPatch - bPatch
     })
 
-    const versions = allData.map(d => d.version)
+    const indexedData: IndexedAuditEntry[] = allData.map(({ version, data }) => ({
+      version,
+      resultsByUrl: new Map<string, AuditPageResult>(data.results.map((result: AuditPageResult) => [result.url, result]))
+    }))
+    const versions = indexedData.map(({ version }) => version)
 
     // 为每个页面类型创建数据集
-    const datasets = {}
+    const datasets = createDatasetCollection()
 
     // 处理每个具体页面
-    for (const [key, url] of Object.entries(pageUrls)) {
-      datasets[key] = {
-        themeGzipped: {},
-        themeRaw: {},
-        resourcesGzipped: {},
-        resourcesRaw: {}
-      }
-
-      // 为每种资源类型初始化数组
-      for (const type of resourceTypes) {
-        datasets[key].themeGzipped[type] = []
-        datasets[key].themeRaw[type] = []
-        datasets[key].resourcesGzipped[type] = []
-        datasets[key].resourcesRaw[type] = []
-      }
-
-      allData.forEach(({ data }) => {
-        const pageData = data.results?.find(r => r.url === url)
+    for (const { key, url } of pageEntries) {
+      for (const { resultsByUrl } of indexedData) {
+        const pageData = resultsByUrl.get(url)
         if (pageData) {
           for (const type of resourceTypes) {
             datasets[key].themeGzipped[type].push(pageData.themeResources[type].transferSize / 1024)
@@ -349,48 +395,46 @@ onMounted(async () => {
             datasets[key].resourcesRaw[type].push(null)
           }
         }
-      })
+      }
     }
 
     // 计算平均值
-    datasets.average = {
-      themeGzipped: {},
-      themeRaw: {},
-      resourcesGzipped: {},
-      resourcesRaw: {}
-    }
-
-    // 为每种资源类型初始化数组
-    for (const type of resourceTypes) {
-      datasets.average.themeGzipped[type] = []
-      datasets.average.themeRaw[type] = []
-      datasets.average.resourcesGzipped[type] = []
-      datasets.average.resourcesRaw[type] = []
-    }
+    const hasCompleteDatasetValues = (
+      values: Record<DatasetKind, number | null>
+    ): values is Record<DatasetKind, number> => datasetKinds.every((kind) => values[kind] !== null)
 
     for (let i = 0; i < versions.length; i++) {
       for (const type of resourceTypes) {
-        let themeGzippedSum = 0, themeRawSum = 0, resourcesGzippedSum = 0, resourcesRawSum = 0
+        const sums = {
+          themeGzipped: 0,
+          themeRaw: 0,
+          resourcesGzipped: 0,
+          resourcesRaw: 0
+        } satisfies Record<DatasetKind, number>
         let count = 0
 
-        for (const key of Object.keys(pageUrls)) {
-          if (datasets[key].themeGzipped[type][i] !== null) {
-            themeGzippedSum += datasets[key].themeGzipped[type][i]
-            themeRawSum += datasets[key].themeRaw[type][i]
-            resourcesGzippedSum += datasets[key].resourcesGzipped[type][i]
-            resourcesRawSum += datasets[key].resourcesRaw[type][i]
+        for (const { key } of pageEntries) {
+          const values = {
+            themeGzipped: datasets[key].themeGzipped[type][i],
+            themeRaw: datasets[key].themeRaw[type][i],
+            resourcesGzipped: datasets[key].resourcesGzipped[type][i],
+            resourcesRaw: datasets[key].resourcesRaw[type][i]
+          } satisfies Record<DatasetKind, number | null>
+
+          if (hasCompleteDatasetValues(values)) {
+            for (const kind of datasetKinds) {
+              sums[kind] += values[kind]
+            }
             count++
           }
         }
 
-        datasets.average.themeGzipped[type].push(count > 0 ? themeGzippedSum / count : null)
-        datasets.average.themeRaw[type].push(count > 0 ? themeRawSum / count : null)
-        datasets.average.resourcesGzipped[type].push(count > 0 ? resourcesGzippedSum / count : null)
-        datasets.average.resourcesRaw[type].push(count > 0 ? resourcesRawSum / count : null)
+        for (const kind of datasetKinds) {
+          datasets.average[kind][type].push(count > 0 ? sums[kind] / count : null)
+        }
       }
     }
 
-    stageProgress.value.dataProcessing = 100
     loadingProgress.value = 100
     console.timeEnd('  2️⃣ 数据排序与处理')
 
@@ -403,78 +447,44 @@ onMounted(async () => {
 
     // 创建图表数据格式的函数
     function createChartDatasets() {
+      if (!rawDatasets.value) return
+      const currentRawDatasets = rawDatasets.value
       const colors = resourceColors.value
       let processedCount = 0
-      const totalCharts = Object.keys(rawDatasets.value.datasets).length * 4 // 每个页面4个图表
+      const totalCharts = (pageEntries.length + 1) * 4 // 每个页面4个图表
+      const labels = currentRawDatasets.versions
+      const createChartSeries = (series: NumericSeries): ChartSeries => ({
+        labels,
+        datasets: resourceTypes.map((type) => ({
+          label: resourceLabels[type],
+          data: series[type],
+          borderColor: colors[type],
+          backgroundColor: colors[type],
+          tension: 0.1,
+          borderWidth: type === 'total' ? 3 : 2
+        }))
+      })
+      const updateChartData = (pageKey: PageKey, pageData: PageDatasets) => {
+        const pageCharts = {} as ChartPageData
 
-      for (const [pageKey, pageData] of Object.entries(rawDatasets.value.datasets)) {
-        chartDatasets.value[pageKey] = {
-          themeGzipped: {
-            labels: rawDatasets.value.versions,
-            datasets: resourceTypes.map(type => ({
-              label: resourceLabels[type],
-              data: pageData.themeGzipped[type],
-              borderColor: colors[type],
-              backgroundColor: colors[type],
-              tension: 0.1,
-              borderWidth: type === 'total' ? 3 : 2
-            }))
-          }
+        for (const kind of datasetKinds) {
+          pageCharts[kind] = createChartSeries(pageData[kind])
+          chartLoadingStatus.value[pageKey][kind] = false
+          processedCount++
+          loadingProgress.value = Math.round((processedCount / totalCharts) * 100)
         }
-        chartLoadingStatus.value[pageKey].themeGzipped = false
-        processedCount++
-        loadingProgress.value = Math.round((processedCount / totalCharts) * 100)
 
-        chartDatasets.value[pageKey].themeRaw = {
-          labels: rawDatasets.value.versions,
-          datasets: resourceTypes.map(type => ({
-            label: resourceLabels[type],
-            data: pageData.themeRaw[type],
-            borderColor: colors[type],
-            backgroundColor: colors[type],
-            tension: 0.1,
-            borderWidth: type === 'total' ? 3 : 2
-          }))
-        }
-        chartLoadingStatus.value[pageKey].themeRaw = false
-        processedCount++
-        loadingProgress.value = Math.round((processedCount / totalCharts) * 100)
-
-        chartDatasets.value[pageKey].resourcesGzipped = {
-          labels: rawDatasets.value.versions,
-          datasets: resourceTypes.map(type => ({
-            label: resourceLabels[type],
-            data: pageData.resourcesGzipped[type],
-            borderColor: colors[type],
-            backgroundColor: colors[type],
-            tension: 0.1,
-            borderWidth: type === 'total' ? 3 : 2
-          }))
-        }
-        chartLoadingStatus.value[pageKey].resourcesGzipped = false
-        processedCount++
-        loadingProgress.value = Math.round((processedCount / totalCharts) * 100)
-
-        chartDatasets.value[pageKey].resourcesRaw = {
-          labels: rawDatasets.value.versions,
-          datasets: resourceTypes.map(type => ({
-            label: resourceLabels[type],
-            data: pageData.resourcesRaw[type],
-            borderColor: colors[type],
-            backgroundColor: colors[type],
-            tension: 0.1,
-            borderWidth: type === 'total' ? 3 : 2
-          }))
-        }
-        chartLoadingStatus.value[pageKey].resourcesRaw = false
-        processedCount++
-        loadingProgress.value = Math.round((processedCount / totalCharts) * 100)
+        chartDatasets.value[pageKey] = pageCharts
       }
+
+      for (const { key } of pageEntries) {
+        updateChartData(key, currentRawDatasets.datasets[key])
+      }
+      updateChartData('average', currentRawDatasets.datasets.average)
     }
 
     // 初始创建图表数据
     createChartDatasets()
-    stageProgress.value.chartCreation = 100
     loadingProgress.value = 100
     console.timeEnd('  3️⃣ 图表数据创建')
 
@@ -498,7 +508,6 @@ const LineChart = defineClientComponent(async () => {
   const { Line } = await import('vue-chartjs')
   
   const {
-    Chart,
     CategoryScale,
     LinearScale,
     PointElement,
@@ -523,6 +532,7 @@ const LineChart = defineClientComponent(async () => {
   return Line
 })
 </script>
+<!-- markdownlint-enable MD011 -->
 
 ## Lighthouse
 
@@ -536,7 +546,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.average?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.average.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.average?.themeGzipped">
   <LineChart :data="chartDatasets.average.themeGzipped" :options="chartOptions" />
@@ -545,7 +555,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.average?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.average.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.average?.themeRaw">
   <LineChart :data="chartDatasets.average.themeRaw" :options="chartOptions" />
@@ -554,7 +564,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.average?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.average.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.average?.resourcesGzipped">
   <LineChart :data="chartDatasets.average.resourcesGzipped" :options="chartOptions" />
@@ -563,7 +573,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.average?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.average.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.average?.resourcesRaw">
   <LineChart :data="chartDatasets.average.resourcesRaw" :options="chartOptions" />
@@ -574,7 +584,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.home?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.home.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.home?.themeGzipped">
   <LineChart :data="chartDatasets.home.themeGzipped" :options="chartOptions" />
@@ -583,7 +593,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.home?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.home.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.home?.themeRaw">
   <LineChart :data="chartDatasets.home.themeRaw" :options="chartOptions" />
@@ -592,7 +602,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.home?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.home.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.home?.resourcesGzipped">
   <LineChart :data="chartDatasets.home.resourcesGzipped" :options="chartOptions" />
@@ -601,7 +611,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.home?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.home.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.home?.resourcesRaw">
   <LineChart :data="chartDatasets.home.resourcesRaw" :options="chartOptions" />
@@ -612,7 +622,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.archives?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.archives.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.archives?.themeGzipped">
   <LineChart :data="chartDatasets.archives.themeGzipped" :options="chartOptions" />
@@ -621,7 +631,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.archives?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.archives.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.archives?.themeRaw">
   <LineChart :data="chartDatasets.archives.themeRaw" :options="chartOptions" />
@@ -630,7 +640,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.archives?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.archives.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.archives?.resourcesGzipped">
   <LineChart :data="chartDatasets.archives.resourcesGzipped" :options="chartOptions" />
@@ -639,7 +649,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.archives?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.archives.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.archives?.resourcesRaw">
   <LineChart :data="chartDatasets.archives.resourcesRaw" :options="chartOptions" />
@@ -650,7 +660,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.post?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.post.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.post?.themeGzipped">
   <LineChart :data="chartDatasets.post.themeGzipped" :options="chartOptions" />
@@ -659,7 +669,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.post?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.post.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.post?.themeRaw">
   <LineChart :data="chartDatasets.post.themeRaw" :options="chartOptions" />
@@ -668,7 +678,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.post?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.post.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.post?.resourcesGzipped">
   <LineChart :data="chartDatasets.post.resourcesGzipped" :options="chartOptions" />
@@ -677,7 +687,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.post?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.post.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.post?.resourcesRaw">
   <LineChart :data="chartDatasets.post.resourcesRaw" :options="chartOptions" />
@@ -688,7 +698,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.tags?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tags.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tags?.themeGzipped">
   <LineChart :data="chartDatasets.tags.themeGzipped" :options="chartOptions" />
@@ -697,7 +707,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.tags?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tags.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tags?.themeRaw">
   <LineChart :data="chartDatasets.tags.themeRaw" :options="chartOptions" />
@@ -706,7 +716,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.tags?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tags.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tags?.resourcesGzipped">
   <LineChart :data="chartDatasets.tags.resourcesGzipped" :options="chartOptions" />
@@ -715,7 +725,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.tags?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tags.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tags?.resourcesRaw">
   <LineChart :data="chartDatasets.tags.resourcesRaw" :options="chartOptions" />
@@ -726,7 +736,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.tagDetail?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tagDetail.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tagDetail?.themeGzipped">
   <LineChart :data="chartDatasets.tagDetail.themeGzipped" :options="chartOptions" />
@@ -735,7 +745,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.tagDetail?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tagDetail.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tagDetail?.themeRaw">
   <LineChart :data="chartDatasets.tagDetail.themeRaw" :options="chartOptions" />
@@ -744,7 +754,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.tagDetail?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tagDetail.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tagDetail?.resourcesGzipped">
   <LineChart :data="chartDatasets.tagDetail.resourcesGzipped" :options="chartOptions" />
@@ -753,7 +763,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.tagDetail?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.tagDetail.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.tagDetail?.resourcesRaw">
   <LineChart :data="chartDatasets.tagDetail.resourcesRaw" :options="chartOptions" />
@@ -764,7 +774,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.categories?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categories.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categories?.themeGzipped">
   <LineChart :data="chartDatasets.categories.themeGzipped" :options="chartOptions" />
@@ -773,7 +783,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.categories?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categories.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categories?.themeRaw">
   <LineChart :data="chartDatasets.categories.themeRaw" :options="chartOptions" />
@@ -782,7 +792,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.categories?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categories.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categories?.resourcesGzipped">
   <LineChart :data="chartDatasets.categories.resourcesGzipped" :options="chartOptions" />
@@ -791,7 +801,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.categories?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categories.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categories?.resourcesRaw">
   <LineChart :data="chartDatasets.categories.resourcesRaw" :options="chartOptions" />
@@ -802,7 +812,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.categoryDetail?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categoryDetail.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categoryDetail?.themeGzipped">
   <LineChart :data="chartDatasets.categoryDetail.themeGzipped" :options="chartOptions" />
@@ -811,7 +821,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.categoryDetail?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categoryDetail.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categoryDetail?.themeRaw">
   <LineChart :data="chartDatasets.categoryDetail.themeRaw" :options="chartOptions" />
@@ -820,7 +830,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.categoryDetail?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categoryDetail.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categoryDetail?.resourcesGzipped">
   <LineChart :data="chartDatasets.categoryDetail.resourcesGzipped" :options="chartOptions" />
@@ -829,7 +839,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.categoryDetail?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.categoryDetail.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.categoryDetail?.resourcesRaw">
   <LineChart :data="chartDatasets.categoryDetail.resourcesRaw" :options="chartOptions" />
@@ -840,7 +850,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.author?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.author.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.author?.themeGzipped">
   <LineChart :data="chartDatasets.author.themeGzipped" :options="chartOptions" />
@@ -849,7 +859,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.author?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.author.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.author?.themeRaw">
   <LineChart :data="chartDatasets.author.themeRaw" :options="chartOptions" />
@@ -858,7 +868,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.author?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.author.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.author?.resourcesGzipped">
   <LineChart :data="chartDatasets.author.resourcesGzipped" :options="chartOptions" />
@@ -867,7 +877,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.author?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.author.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.author?.resourcesRaw">
   <LineChart :data="chartDatasets.author.resourcesRaw" :options="chartOptions" />
@@ -878,7 +888,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.about?.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.about.themeGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.about?.themeGzipped">
   <LineChart :data="chartDatasets.about.themeGzipped" :options="chartOptions" />
@@ -887,7 +897,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 主题资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.about?.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.about.themeRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.about?.themeRaw">
   <LineChart :data="chartDatasets.about.themeRaw" :options="chartOptions" />
@@ -896,7 +906,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（压缩）
 
-<ProgressBar :isLoading="chartLoadingStatus.about?.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.about.resourcesGzipped" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.about?.resourcesGzipped">
   <LineChart :data="chartDatasets.about.resourcesGzipped" :options="chartOptions" />
@@ -905,7 +915,7 @@ const LineChart = defineClientComponent(async () => {
 
 ::: details 页面资源（原始）
 
-<ProgressBar :isLoading="chartLoadingStatus.about?.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
+<ProgressBar :isLoading="chartLoadingStatus.about.resourcesRaw" :stage="loadingStage" :progress="loadingProgress" />
 
 <div style="position: relative; height: 400px;" v-if="chartDatasets.about?.resourcesRaw">
   <LineChart :data="chartDatasets.about.resourcesRaw" :options="chartOptions" />
