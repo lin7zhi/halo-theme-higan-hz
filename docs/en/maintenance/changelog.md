@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.65.2] - 2026-05-02
+
 ### 🐛 Bug Fixes
 
 - Fixed an issue in Halo CMS 2.24 where automatic query parameters on theme assets could make the default theme `logo` and the site `favicon` use different resource URLs and fetch `logo.avif` twice.
@@ -1927,7 +1929,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored the theme-switching implementation.
 - Updated original project links to point to the fork and adjusted metadata to avoid conflicts with the upstream theme.
 
-[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.1...HEAD
+[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.2...HEAD
+[1.65.2]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.1...v1.65.2
 [1.65.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.0...v1.65.1
 [1.65.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.1...v1.65.0
 [1.64.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.0...v1.64.1

@@ -23,6 +23,8 @@
 
 ## [Unreleased]
 
+## [1.65.2] - 2026-05-02
+
 ### 🐛 错误修复
 
 - 修复 Halo CMS 2.24 会自动为主题资源追加查询参数，导致主题默认 `logo` 与站点 `favicon` 的资源 URL 不一致并可能重复加载 `logo.avif` 的问题。
@@ -1856,7 +1858,8 @@
 - 重构样式切换方式
 - 修改原项目链接指向 fork 后的项目链接，修改元数据避免与原主题冲突
 
-[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.1...HEAD
+[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.2...HEAD
+[1.65.2]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.1...v1.65.2
 [1.65.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.0...v1.65.1
 [1.65.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.1...v1.65.0
 [1.64.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.0...v1.64.1
