@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.66.0] - 2026-05-03
+
 ### 💥 Breaking Changes
 
 - Changed the precompression release strategy: default packages now keep only `.br`; use the new full precompressed packages when you need `.gz`, `.br`, and `.zst`.
@@ -1933,7 +1935,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored the theme-switching implementation.
 - Updated original project links to point to the fork and adjusted metadata to avoid conflicts with the upstream theme.
 
-[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.2...HEAD
+[Unreleased]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.66.0...HEAD
+[1.66.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.2...v1.66.0
 [1.65.2]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.1...v1.65.2
 [1.65.1]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.65.0...v1.65.1
 [1.65.0]: https://github.com/HowieHz/halo-theme-higan-hz/compare/v1.64.1...v1.65.0
