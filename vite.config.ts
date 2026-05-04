@@ -13,11 +13,14 @@ import pkg from "./package.json" with { type: "json" };
 import removeEmptyCssComments from "./plugins/vite-plugin-remove-empty-css-comments.ts";
 import thymeleafMinify from "./plugins/vite-plugin-thymeleaf-minify.ts";
 
+// Build profile controls which theme asset set is emitted, such as the default or tiny font bundle.
 const BUILD_PROFILES = ["default", "tiny"] as const;
 type BuildProfile = (typeof BUILD_PROFILES)[number];
+// Precompress profile controls which pre-generated compressed assets are emitted alongside the build output.
 const BUILD_PRECOMPRESS_PROFILES = ["br-only", "full", "none"] as const;
 type BuildPrecompressProfile = (typeof BUILD_PRECOMPRESS_PROFILES)[number];
-const BUILD_OUTPUT_PROFILES = ["custom", "original"] as const;
+// "minify" minimizes final artifact shape, including short asset names and Tailwind class mangling.
+const BUILD_OUTPUT_PROFILES = ["minify", "original"] as const;
 type BuildOutputProfile = (typeof BUILD_OUTPUT_PROFILES)[number];
 
 function pickEnvValue<T extends string>(value: string | undefined, allowedValues: readonly T[], fallback: T): T {
@@ -34,7 +37,7 @@ export default defineConfig((): UserConfig => {
   const outputProfile = pickEnvValue<BuildOutputProfile>(
     process.env.BUILD_OUTPUT_PROFILE,
     BUILD_OUTPUT_PROFILES,
-    "custom",
+    "minify",
   );
 
   const precompressAlgorithms =
@@ -61,7 +64,7 @@ export default defineConfig((): UserConfig => {
     // Tailwind CSS with Vite integration
     tailwindcss(),
     // Unplugin Tailwind CSS Mangle to obfuscate Tailwind CSS class names
-    utwm(),
+    ...(outputProfile === "minify" ? [utwm()] : []),
     // remove /* empty css */ comments from generated JS files
     // https://github.com/vitejs/vite/issues/1794#issuecomment-769819851
     removeEmptyCssComments(),
