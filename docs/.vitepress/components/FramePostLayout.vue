@@ -20,18 +20,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <article id="article-tag" class="post">
-    <div id="vp-app" ref="el" class="content loading" />
+  <article
+    id="article-tag"
+    class="post"
+  >
+    <div
+      id="vp-app"
+      ref="el"
+      class="content loading"
+    />
   </article>
 </template>
 
 <style src="./default.css" scoped></style>
 <!-- 导入主题样式 -->
-<style src="../../../src/templates/components/theme-dark/styles.less" scoped></style>
-<style src="../../../src/templates/components/theme-light/styles.less" scoped></style>
-<style src="../../../src/templates/page-components/shared/main.css" scoped></style>
-<style src="../../../src/templates/components/text-size-normal/styles.css" scoped></style>
+<style src="@templates/components/theme-dark/styles.less" scoped></style>
+<style src="@templates/components/theme-light/styles.less" scoped></style>
+<style src="@runtime/global/global-styles/styles.css" scoped></style>
+<style src="@templates/components/text-size-normal/styles.css" scoped></style>
 <!-- 导入 post 页样式 -->
-<style src="../../../src/templates/page-components/post/styles.css" scoped></style>
-<style src="../../../src/templates/page-components/utils/article.css" scoped></style>
-<style src="../../../src/templates/page-components/utils/article-metadata.css" scoped></style>
+<style src="@runtime/pages/post/styles.css" scoped></style>
+<style src="@runtime/styles/article.css" scoped></style>
+<style src="@runtime/styles/article-metadata.css" scoped></style>

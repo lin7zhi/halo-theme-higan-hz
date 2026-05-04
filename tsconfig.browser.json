@@ -3,7 +3,10 @@
   "extends": "./tsconfig/tsconfig.browser.json",
   "compilerOptions": {
     "declarationDir": "./node_modules/.tmp/types/root/browser",
-    "isolatedDeclarations": false
+    "isolatedDeclarations": false,
+    "paths": {
+      "@runtime/*": ["./src/templates/_runtime/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

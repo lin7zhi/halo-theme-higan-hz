@@ -10,11 +10,12 @@
       }
     }
   ],
+  "singleAttributePerLine": true,
   "sortImports": {},
   "sortPackageJson": {
     "sortScripts": true
   },
   "sortTailwindcss": {
-    "stylesheet": "./src/templates/page-components/shared/tailwind.css"
+    "stylesheet": "./src/templates/_runtime/global/tailwindcss/styles.css"
   }
 }
